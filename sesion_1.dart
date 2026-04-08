@@ -16,4 +16,6 @@ void main(){
   edades.forEach((nombre, edad) {
     print("$nombre tiene $edad años");
   });
+  var resultado = sumar(10, 15);
+  print("El resultado de la suma es: $resultado");
 }
