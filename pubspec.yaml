@@ -1,0 +1,46 @@
+name: finanzas_app
+description: App de gestión de finanzas personales con tracker de presupuesto.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+  flutter: ">=3.19.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+
+  # State Management
+  flutter_riverpod: ^2.5.1
+
+  # Navigation
+  go_router: ^14.2.0
+
+  # Persistencia local
+  shared_preferences: ^2.2.3
+
+  # REST API
+  http: ^1.2.1
+
+  # Hardware nativo: notificaciones
+  flutter_local_notifications: ^17.2.1+2
+  timezone: ^0.9.4
+
+  # Charts
+  fl_chart: ^0.68.0
+
+  # Formato de números, fechas y monedas
+  intl: ^0.19.0
+
+  # Comparación de entidades inmutables
+  equatable: ^2.0.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
