@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../finanzas/presentation/providers/finanzas_providers.dart';
 import '../../data/datasources/debt_local_datasource.dart';
 import '../../data/repositories/debt_repository_impl.dart';
 import '../../domain/repositories/debt_repository.dart';
@@ -42,7 +43,9 @@ final makePaymentUseCaseProvider = Provider<MakePaymentUseCase>((ref) {
 final snowballCalculatorProvider =
     Provider<SnowballCalculator>((ref) => const SnowballCalculator());
 
-// Notifier
+// Notifier — ahora también inyecta el TransactionRepository (cross-feature)
+// y un callback para refrescar el feed de transacciones cuando se crea un gasto
+// auto-generado al pagar una deuda.
 final debtsNotifierProvider =
     StateNotifierProvider<DebtsNotifier, DebtsState>((ref) {
   return DebtsNotifier(
@@ -52,5 +55,8 @@ final debtsNotifierProvider =
     makePayment: ref.watch(makePaymentUseCaseProvider),
     repository: ref.watch(debtRepositoryProvider),
     calculator: ref.watch(snowballCalculatorProvider),
+    transactionRepository: ref.watch(transactionRepositoryProvider),
+    onTransactionCreated: () =>
+        ref.read(transactionsNotifierProvider.notifier).loadAll(),
   );
 });

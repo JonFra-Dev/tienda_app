@@ -18,6 +18,9 @@ class TransactionCategory extends Equatable {
   @override
   List<Object?> get props => [id, name];
 
+  /// ID especial para gastos auto-generados al pagar deudas.
+  static const String debtsCategoryId = 'debts';
+
   static const List<TransactionCategory> all = [
     TransactionCategory(
       id: 'food',
@@ -60,6 +63,12 @@ class TransactionCategory extends Equatable {
       name: 'Salario',
       icon: Icons.attach_money,
       color: Color(0xFF26A69A),
+    ),
+    TransactionCategory(
+      id: debtsCategoryId,
+      name: 'Pago de deudas',
+      icon: Icons.ac_unit,
+      color: Color(0xFF5C6BC0),
     ),
     TransactionCategory(
       id: 'other',
