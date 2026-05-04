@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
+import '../../../babysteps/presentation/providers/babysteps_providers.dart';
 import '../../../debts/presentation/providers/debts_providers.dart';
 import '../../../savings/presentation/providers/savings_providers.dart';
 import '../providers/finanzas_providers.dart';
@@ -23,10 +24,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(transactionsNotifierProvider.notifier).loadAll();
-      ref.read(debtsNotifierProvider.notifier).loadAll();
-      ref.read(savingsNotifierProvider.notifier).loadAll();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await ref.read(transactionsNotifierProvider.notifier).loadAll();
+      await ref.read(debtsNotifierProvider.notifier).loadAll();
+      await ref.read(savingsNotifierProvider.notifier).loadAll();
+      // Reprogramar todas las notificaciones de ingresos al iniciar.
+      await ref.read(savingsNotifierProvider.notifier).rebuildAllReminders();
     });
   }
 
@@ -72,6 +75,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final state = ref.watch(transactionsNotifierProvider);
     final debtsState = ref.watch(debtsNotifierProvider);
     final savingsState = ref.watch(savingsNotifierProvider);
+    final babySteps = ref.watch(babyStepsStatusProvider);
     final fmt = NumberFormat.currency(
       locale: 'es_CO',
       symbol: '\$',
@@ -82,6 +86,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       appBar: AppBar(
         title: const Text(AppStrings.appName),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.flag_outlined),
+            tooltip: 'Mis Baby Steps',
+            onPressed: () => context.push('/babysteps'),
+          ),
           IconButton(
             icon: const Icon(Icons.savings_outlined),
             tooltip: 'Ahorros e ingresos',
@@ -110,7 +119,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           await ref.read(debtsNotifierProvider.notifier).loadAll();
           await ref.read(savingsNotifierProvider.notifier).loadAll();
         },
-        child: _buildBody(state, debtsState, savingsState, fmt),
+        child: _buildBody(state, debtsState, savingsState, babySteps, fmt),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push('/add-transaction'),
@@ -120,7 +129,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _buildBody(state, debtsState, savingsState, NumberFormat fmt) {
+  Widget _buildBody(
+      state, debtsState, savingsState, babySteps, NumberFormat fmt) {
     if (state.isLoading && state.transactions.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -136,12 +146,83 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.only(bottom: 100, top: 8),
       children: [
+        // ============== TARJETA BABY STEP ACTUAL ==============
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Card(
+            color: AppColors.purple,
+            child: InkWell(
+              onTap: () => context.push('/babysteps'),
+              borderRadius: BorderRadius.circular(16),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: AppColors.yellow,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${babySteps.currentStep.number}',
+                          style: const TextStyle(
+                            color: AppColors.purple,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Estás en Baby Step',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 11,
+                            ),
+                          ),
+                          Text(
+                            babySteps.currentStep.shortName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: babySteps.progressToCurrent.clamp(0, 1),
+                              minHeight: 4,
+                              backgroundColor: Colors.white24,
+                              valueColor: const AlwaysStoppedAnimation<Color>(
+                                AppColors.yellow,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right, color: Colors.white),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
         if (summary != null)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: BudgetCard(summary: summary, onEditBudget: _editBudget),
           ),
-        // Tarjeta de ahorros
         if (savingsState.accounts.isNotEmpty ||
             savingsState.incomeSources.isNotEmpty)
           Padding(
@@ -195,12 +276,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ),
           ),
-        // Tarjeta de deudas
         if (debtsState.debts.isNotEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: Card(
-              color: AppColors.purple,
+              color: AppColors.indigo,
               child: InkWell(
                 onTap: () => context.push('/debts'),
                 borderRadius: BorderRadius.circular(16),

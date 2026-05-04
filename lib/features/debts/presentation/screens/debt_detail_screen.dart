@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/validators.dart';
+import '../providers/debt_payments_provider.dart';
 import '../providers/debts_providers.dart';
 
 class DebtDetailScreen extends ConsumerStatefulWidget {
@@ -86,12 +86,14 @@ class _DebtDetailScreenState extends ConsumerState<DebtDetailScreen> {
       );
     }
 
+    final paymentsAsync = ref.watch(debtPaymentsProvider(widget.debtId));
     final fmt = NumberFormat.currency(
       locale: 'es_CO',
       symbol: '\$',
       decimalDigits: 0,
     );
     final dateFmt = DateFormat('dd MMMM yyyy', 'es_CO');
+    final dateTimeFmt = DateFormat('dd MMM, HH:mm', 'es_CO');
 
     return Scaffold(
       appBar: AppBar(title: Text(debt.name)),
@@ -177,7 +179,7 @@ class _DebtDetailScreenState extends ConsumerState<DebtDetailScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           if (!debt.isPaidOff)
             ElevatedButton.icon(
               onPressed: _registerPayment,
@@ -213,6 +215,98 @@ class _DebtDetailScreenState extends ConsumerState<DebtDetailScreen> {
                 ],
               ),
             ),
+          // ============== HISTORIAL DE PAGOS ==============
+          const SizedBox(height: 24),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: Row(
+              children: [
+                Icon(Icons.history, color: AppColors.indigo),
+                SizedBox(width: 8),
+                Text(
+                  'Historial de pagos',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          paymentsAsync.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.all(20),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (e, _) => Card(
+              color: AppColors.expense.withValues(alpha: 0.1),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text('Error al cargar el historial: $e'),
+              ),
+            ),
+            data: (payments) {
+              if (payments.isEmpty) {
+                return Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      children: [
+                        const Icon(Icons.receipt_long_outlined,
+                            size: 48, color: AppColors.textHint),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Aún no has registrado pagos para esta deuda.',
+                          style: TextStyle(
+                            color: AppColors.textSecondary.withValues(alpha: 0.8),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+              return Card(
+                child: Column(
+                  children: payments.asMap().entries.map((entry) {
+                    final i = entry.key;
+                    final p = entry.value;
+                    return Column(
+                      children: [
+                        ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor:
+                                AppColors.income.withValues(alpha: 0.18),
+                            child: const Icon(Icons.check,
+                                color: AppColors.income),
+                          ),
+                          title: Text(
+                            fmt.format(p.amount),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          subtitle: Text(dateTimeFmt.format(p.date)),
+                          trailing: p.note != null && p.note!.isNotEmpty
+                              ? Tooltip(
+                                  message: p.note!,
+                                  child: const Icon(Icons.note_outlined,
+                                      size: 16),
+                                )
+                              : null,
+                        ),
+                        if (i < payments.length - 1)
+                          const Divider(height: 0, indent: 72),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 24),
         ],
       ),
     );

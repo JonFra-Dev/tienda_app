@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/services/notification_service.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../finanzas/presentation/providers/finanzas_providers.dart';
 import '../../data/datasources/savings_local_datasource.dart';
@@ -27,7 +28,7 @@ final savingsRepositoryProvider = Provider<SavingsRepository>((ref) {
   return SavingsRepositoryImpl(ref.watch(savingsLocalDataSourceProvider));
 });
 
-// Calculadora de frecuencia (lógica pura)
+// Calculadora de frecuencia
 final frequencyCalculatorProvider =
     Provider<FrequencyCalculator>((ref) => const FrequencyCalculator());
 
@@ -84,6 +85,7 @@ final savingsNotifierProvider =
     recordIncomeUC: ref.watch(recordIncomeUseCaseProvider),
     repository: ref.watch(savingsRepositoryProvider),
     transactionRepository: ref.watch(transactionRepositoryProvider),
+    notificationService: NotificationService.instance,
     onTransactionCreated: () =>
         ref.read(transactionsNotifierProvider.notifier).loadAll(),
   );

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/providers/auth_providers.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
+import '../../features/babysteps/presentation/screens/baby_steps_screen.dart';
 import '../../features/debts/presentation/screens/add_debt_screen.dart';
 import '../../features/debts/presentation/screens/debt_detail_screen.dart';
 import '../../features/debts/presentation/screens/debts_list_screen.dart';
@@ -19,7 +20,6 @@ import '../../features/savings/presentation/screens/add_income_source_screen.dar
 import '../../features/savings/presentation/screens/income_source_detail_screen.dart';
 import '../../features/savings/presentation/screens/savings_dashboard_screen.dart';
 
-/// go_router con redirect basado en el estado de autenticación.
 final goRouterProvider = Provider<GoRouter>((ref) {
   final notifier = ValueNotifier(0);
   ref.listen(authNotifierProvider, (_, __) => notifier.value++);
@@ -67,6 +67,12 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: '/profile',
         name: 'profile',
         builder: (_, __) => const ProfileScreen(),
+      ),
+      // ============== BABY STEPS ==============
+      GoRoute(
+        path: '/babysteps',
+        name: 'babysteps',
+        builder: (_, __) => const BabyStepsScreen(),
       ),
       // ============== DEBTS ==============
       GoRoute(
