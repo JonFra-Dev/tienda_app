@@ -5,10 +5,10 @@ import 'package:timezone/timezone.dart' as tz;
 
 /// Servicio de notificaciones locales (hardware nativo).
 ///
-/// Cumple con el requisito de "al menos una funcionalidad de hardware nativo".
 /// Soporta:
 ///   - Alertas inmediatas de presupuesto excedido
 ///   - Recordatorios programados de fechas de ingresos esperados
+///   - Notificaciones de celebración al completar baby steps
 class NotificationService {
   NotificationService._();
   static final NotificationService instance = NotificationService._();
@@ -23,7 +23,6 @@ class NotificationService {
   Future<void> init() async {
     if (_initialized) return;
 
-    // Inicializar timezones (necesario para notificaciones programadas)
     tzdata.initializeTimeZones();
 
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -96,18 +95,48 @@ class NotificationService {
     }
   }
 
+  // ============== CELEBRACIONES DE BABY STEPS ==============
+
+  /// Notificación push cuando el usuario completa un nuevo baby step.
+  Future<void> showCelebration({
+    required int stepNumber,
+    required String stepName,
+  }) async {
+    if (!_initialized) await init();
+
+    const androidDetails = AndroidNotificationDetails(
+      'celebration_channel',
+      'Celebraciones de progreso',
+      channelDescription:
+          'Felicitaciones cuando completas un Baby Step de Dave Ramsey',
+      importance: Importance.max,
+      priority: Priority.max,
+    );
+    const iosDetails = DarwinNotificationDetails();
+    const details =
+        NotificationDetails(android: androidDetails, iOS: iosDetails);
+
+    try {
+      await _plugin.show(
+        // ID negativo único para no chocar con otras notifs
+        -1000 - stepNumber,
+        '🎉 ¡Completaste Baby Step $stepNumber!',
+        '$stepName — Sigue adelante, vas por buen camino 💪',
+        details,
+      );
+    } catch (e) {
+      debugPrint('showCelebration error: $e');
+    }
+  }
+
   // ============== RECORDATORIOS DE INGRESOS ==============
 
-  /// IDs reservados para recordatorios de ingresos (evita choque con otros).
   static const int _incomeReminderIdBase = 1000000;
 
-  /// Convierte un sourceId (string) a un int único pero estable.
   int _idForSource(String sourceId) {
     return _incomeReminderIdBase + sourceId.hashCode.abs() % 1000000;
   }
 
-  /// Programa un recordatorio para 1 día antes de la fecha esperada,
-  /// a las 9 AM hora local. Si la fecha ya pasó, no agenda nada.
   Future<void> scheduleIncomeReminder({
     required String sourceId,
     required String sourceName,
@@ -116,16 +145,14 @@ class NotificationService {
   }) async {
     if (!_initialized) await init();
 
-    // Cancelar el anterior por si existía
     await cancelIncomeReminder(sourceId);
 
-    // Notificar 1 día antes a las 9 AM
     final reminderDate = nextExpectedDate.subtract(const Duration(days: 1));
     final scheduled = DateTime(
       reminderDate.year,
       reminderDate.month,
       reminderDate.day,
-      9, // 9 AM
+      9,
     );
 
     if (scheduled.isBefore(DateTime.now())) {
@@ -157,7 +184,7 @@ class NotificationService {
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: null, // una sola vez
+        matchDateTimeComponents: null,
       );
     } catch (e) {
       debugPrint('scheduleIncomeReminder error: $e');
@@ -173,7 +200,6 @@ class NotificationService {
     }
   }
 
-  /// Cancela todos los recordatorios de ingresos pendientes.
   Future<void> cancelAllIncomeReminders() async {
     if (!_initialized) await init();
     try {

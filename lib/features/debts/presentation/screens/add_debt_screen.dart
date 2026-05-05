@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/validators.dart';
+import '../../../savings/domain/entities/savings_account.dart';
+import '../../../savings/presentation/providers/savings_providers.dart';
 import '../../domain/entities/debt.dart';
 import '../providers/debts_providers.dart';
 
@@ -31,11 +34,148 @@ class _AddDebtScreenState extends ConsumerState<AddDebtScreen> {
     super.dispose();
   }
 
+  /// Detecta el saldo total del fondo de emergencia.
+  double _emergencyFundBalance() {
+    final state = ref.read(savingsNotifierProvider);
+    return state.accounts
+        .where((a) => a.type == SavingsAccountType.emergencyFund)
+        .fold(0.0, (s, a) => s + a.currentBalance);
+  }
+
+  /// Mostrar diálogo Ramsey-style ANTES de aceptar la deuda.
+  /// Retorna true si el usuario confirma agregar la deuda igual.
+  Future<bool> _showRamseyWarning(double newDebtAmount) async {
+    final emergencyFund = _emergencyFundBalance();
+    final fmt = NumberFormat.currency(
+      locale: 'es_CO',
+      symbol: '\$',
+      decimalDigits: 0,
+    );
+
+    final hasEnoughFund = emergencyFund >= newDebtAmount;
+    final hasMinFund = emergencyFund > 0;
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded,
+                color: AppColors.warning, size: 28),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Antes de endeudarte…',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (hasEnoughFund) ...[
+              Text(
+                'Tu fondo de emergencia tiene ${fmt.format(emergencyFund)}.',
+                style: const TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Es suficiente para cubrir esta deuda de ${fmt.format(newDebtAmount)}. ¿Por qué no usar el fondo en lugar de pagar intereses?',
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ] else if (hasMinFund) ...[
+              Text(
+                'Tienes ${fmt.format(emergencyFund)} en tu fondo de emergencia.',
+                style: const TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Considera usar parte de ese dinero antes de endeudarte. Cada peso que evites pagar en intereses es un peso que se queda contigo.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ] else ...[
+              const Text(
+                'Aún no tienes fondo de emergencia (Baby Step 1).',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Antes de aceptar nuevas deudas, intenta ahorrar al menos \$4.000.000 como colchón. Sin fondo, cada imprevisto se convierte en más deuda.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.purple.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                    color: AppColors.purple.withValues(alpha: 0.3)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.lightbulb_outline,
+                      color: AppColors.purple, size: 18),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Dave Ramsey: "La deuda no es una herramienta, es un riesgo."',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontStyle: FontStyle.italic,
+                        color: AppColors.purple,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar y revisar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.expense),
+            child: const Text('Agregar deuda igual'),
+          ),
+        ],
+      ),
+    );
+
+    return result ?? false;
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _saving = true);
 
     final balance = double.parse(_balanceCtrl.text.replaceAll(',', '.'));
+
+    // Mostrar warning Ramsey antes de proceder
+    final confirmed = await _showRamseyWarning(balance);
+    if (!confirmed || !mounted) return;
+
+    setState(() => _saving = true);
+
     final debt = Debt(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       name: _nameCtrl.text.trim(),

@@ -5,7 +5,10 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_strings.dart';
+import '../../../../core/services/notification_service.dart';
 import '../../../babysteps/presentation/providers/babysteps_providers.dart';
+import '../../../babysteps/presentation/providers/celebrations_provider.dart';
+import '../../../babysteps/presentation/widgets/celebration_dialog.dart';
 import '../../../debts/presentation/providers/debts_providers.dart';
 import '../../../savings/presentation/providers/savings_providers.dart';
 import '../providers/finanzas_providers.dart';
@@ -21,6 +24,8 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  bool _budgetWarningDismissedThisSession = false;
+
   @override
   void initState() {
     super.initState();
@@ -28,8 +33,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       await ref.read(transactionsNotifierProvider.notifier).loadAll();
       await ref.read(debtsNotifierProvider.notifier).loadAll();
       await ref.read(savingsNotifierProvider.notifier).loadAll();
-      // Reprogramar todas las notificaciones de ingresos al iniciar.
       await ref.read(savingsNotifierProvider.notifier).rebuildAllReminders();
+
+      // Verificar si hay celebraciones pendientes (en caso de que se haya
+      // completado un step entre sesiones).
+      final status = ref.read(babyStepsStatusProvider);
+      ref
+          .read(celebrationsProvider.notifier)
+          .checkForNewCompletion(status.completedSteps.map((s) => s.number));
     });
   }
 
@@ -81,6 +92,36 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       symbol: '\$',
       decimalDigits: 0,
     );
+
+    // ============== Listener de celebraciones ==============
+    // Cada vez que el babyStepsStatus cambia, revisar si hay nueva celebración
+    ref.listen(babyStepsStatusProvider, (_, next) {
+      ref
+          .read(celebrationsProvider.notifier)
+          .checkForNewCompletion(next.completedSteps.map((s) => s.number));
+    });
+
+    // Cuando hay un step pendiente de celebrar, mostrar el dialog
+    ref.listen(celebrationsProvider, (_, step) {
+      if (step != null && mounted) {
+        // Push notification además del dialog
+        NotificationService.instance.showCelebration(
+          stepNumber: step.number,
+          stepName: step.shortName,
+        );
+        // Dialog visual
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          CelebrationDialog.show(
+            context,
+            step: step,
+            onSeePlan: () => context.push('/babysteps'),
+          ).then((_) {
+            ref.read(celebrationsProvider.notifier).acknowledgeCelebration();
+          });
+        });
+      }
+    });
 
     return Scaffold(
       appBar: AppBar(
@@ -142,10 +183,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
     }
     final summary = state.summary;
+    final showBudgetWarning = summary != null &&
+        summary.percentUsed >= 80 &&
+        !_budgetWarningDismissedThisSession;
+
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.only(bottom: 100, top: 8),
       children: [
+        // ============== BANNER 80% PRESUPUESTO ==============
+        if (showBudgetWarning)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: _BudgetWarningBanner(
+              percentUsed: summary.percentUsed,
+              remaining: summary.remaining,
+              isOver: summary.isOverBudget,
+              onDismiss: () => setState(
+                  () => _budgetWarningDismissedThisSession = true),
+            ),
+          ),
         // ============== TARJETA BABY STEP ACTUAL ==============
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -365,6 +422,83 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Banner amarillo/rojo de aviso cuando el presupuesto pasa el 80%.
+class _BudgetWarningBanner extends StatelessWidget {
+  final double percentUsed;
+  final double remaining;
+  final bool isOver;
+  final VoidCallback onDismiss;
+
+  const _BudgetWarningBanner({
+    required this.percentUsed,
+    required this.remaining,
+    required this.isOver,
+    required this.onDismiss,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isOver ? AppColors.expense : AppColors.warning;
+    final fmt = NumberFormat.currency(
+      locale: 'es_CO',
+      symbol: '\$',
+      decimalDigits: 0,
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color, width: 1.5),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isOver ? Icons.error_outline : Icons.warning_amber_rounded,
+            color: color,
+            size: 28,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isOver
+                      ? '¡Presupuesto excedido!'
+                      : 'Cuidado: presupuesto al ${percentUsed.toStringAsFixed(0)}%',
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  isOver
+                      ? 'Te has pasado del presupuesto mensual. Revisa tus gastos y considera ajustar.'
+                      : 'Te quedan ${fmt.format(remaining)} este mes. Cuida cada gasto desde ahora.',
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 20),
+            onPressed: onDismiss,
+            tooltip: 'Ocultar',
+            color: AppColors.textSecondary,
+          ),
+        ],
+      ),
     );
   }
 }
